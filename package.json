@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "zenchef-check.js",
   "scripts": {
-    "start": "npx playwright install && node zenchef-check.js"
+    "start": "npx playwright install --with-deps && node zenchef-check.js"
   },
   "dependencies": {
     "express": "^4.18.2",
