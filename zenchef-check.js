@@ -41,6 +41,15 @@ app.get('/check', async (req, res) => {
   runScraping(); // Lancement en arrière-plan
 });
 
+// =============================
+// ENDPOINT RESET
+// =============================
+app.get('/reset', (req, res) => {
+  if (fs.existsSync('last.txt')) {
+    fs.unlinkSync('last.txt');
+  }
+  res.send("last.txt supprimé ✅");
+});
 
 // =============================
 // FONCTION SCRAPING
