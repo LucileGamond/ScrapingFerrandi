@@ -1,83 +1,129 @@
-// Modules nécessaires
+// =============================
+// Zenchef Checker - Railway Ready
+// =============================
+
 const express = require('express');
 const { chromium } = require('playwright');
 const fs = require('fs');
 const twilio = require('twilio');
 
-// Configuration via variables d’environnement
+// =============================
+// VARIABLES D'ENVIRONNEMENT
+// =============================
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const FROM = process.env.TWILIO_FROM;
 const TO = process.env.TWILIO_TO;
 const PORT = process.env.PORT || 3000;
 
-const client = twilio(ACCOUNT_SID, AUTH_TOKEN);
+// Vérification sécurité
+if (!ACCOUNT_SID || !AUTH_TOKEN || !FROM || !TO) {
+  console.error("❌ Variables d'environnement manquantes !");
+}
 
-// Crée le serveur Express
+const client = twilio(ACCOUNT_SID, AUTH_TOKEN);
 const app = express();
 
-// Endpoint HTTP déclenchable par Make
+
+// =============================
+// PAGE RACINE
+// =============================
+app.get('/', (req, res) => {
+  res.send("Zenchef Checker actif ✅ Utilise /check");
+});
+
+
+// =============================
+// ENDPOINT PRINCIPAL
+// =============================
 app.get('/check', async (req, res) => {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+  res.send("Scraping lancé ✅");
+  runScraping(); // Lancement en arrière-plan
+});
+
+
+// =============================
+// FONCTION SCRAPING
+// =============================
+async function runScraping() {
+  let browser;
 
   try {
-    console.log("Ouverture de la page Zenchef...");
-    await page.goto('https://bookings.zenchef.com/results?rid=361825&pid=1001', { waitUntil: 'networkidle' });
+    console.log("🚀 Lancement du scraping...");
+
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
+    const page = await browser.newPage();
+
+    await page.goto(
+      'https://bookings.zenchef.com/results?rid=361825&pid=1001',
+      { waitUntil: 'domcontentloaded', timeout: 60000 }
+    );
+
     await page.waitForTimeout(4000);
 
     async function findNextNotOpenDay() {
       const element = await page.$('.DayPicker-Day--notOpenYet');
       if (!element) return null;
-      return await element.getAttribute('aria-label') || await element.innerText();
+      return (
+        (await element.getAttribute('aria-label')) ||
+        (await element.innerText())
+      );
     }
 
-    console.log("Recherche du prochain jour non ouvert dans le mois courant...");
+    console.log("🔎 Recherche mois courant...");
     let nextNotOpenDay = await findNextNotOpenDay();
 
     if (!nextNotOpenDay) {
-      console.log("Aucun jour trouvé ce mois, passage au mois suivant...");
+      console.log("➡ Passage au mois suivant...");
       await page.click('[data-testid="calendar-next-month-btn"]');
       await page.waitForTimeout(3000);
       nextNotOpenDay = await findNextNotOpenDay();
     }
 
-    await browser.close();
-
     if (!nextNotOpenDay) {
-      console.log("Aucun jour notOpenYet trouvé sur les deux mois.");
-      res.send("Aucun jour non ouvert trouvé");
+      console.log("❌ Aucun jour trouvé.");
       return;
     }
 
-    console.log("Prochain jour non ouvert :", nextNotOpenDay);
+    console.log("📅 Jour trouvé :", nextNotOpenDay);
 
-    const last = fs.existsSync('last.txt') ? fs.readFileSync('last.txt', 'utf8') : '';
+    const last = fs.existsSync('last.txt')
+      ? fs.readFileSync('last.txt', 'utf8')
+      : '';
 
     if (nextNotOpenDay !== last) {
-      console.log("Changement détecté !");
+      console.log("🔔 Nouveau jour détecté !");
       fs.writeFileSync('last.txt', nextNotOpenDay);
 
       await client.messages.create({
         from: FROM,
         to: TO,
-        body: `Le prochain jour non ouvert est maintenant réservable : ${nextNotOpenDay}`
+        body: `📅 Nouveau créneau Zenchef disponible : ${nextNotOpenDay}`
       });
 
-      console.log("Notification envoyée !");
+      console.log("✅ Notification WhatsApp envoyée !");
     } else {
-      console.log("Aucun changement.");
+      console.log("ℹ️ Aucun changement.");
     }
 
-    res.send(`Prochain jour non ouvert : ${nextNotOpenDay}`);
-  } catch (err) {
-    await browser.close();
-    console.error("Erreur :", err);
-    res.status(500).send("Erreur lors de la vérification Zenchef");
+  } catch (error) {
+    console.error("❌ Erreur scraping :", error);
+  } finally {
+    if (browser) {
+      await browser.close();
+      console.log("🧹 Navigateur fermé.");
+    }
   }
-});
+}
 
-// Démarrage du serveur
+
+// =============================
+// LANCEMENT SERVEUR
+// =============================
 app.listen(PORT, () => {
-  console.log(`Zenchef checker running on http://localhost:${PORT}/check`);
+  console.log(`🌍 Serveur démarré sur le port ${PORT}`);
 });
