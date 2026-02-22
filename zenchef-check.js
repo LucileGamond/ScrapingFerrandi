@@ -30,30 +30,21 @@ app.get('/', (req, res) => {
 // ENDPOINT PRINCIPAL
 // =============================
 app.get('/check', async (req, res) => {
-
-  // On ne bloque pas la réponse → envoie immédiate
-  res.json({ status: "ok", message: "Scraping lancé" });
-
   try {
     const nextNotOpenDay = await runScraping();
 
     if (!nextNotOpenDay) {
-      console.log("❌ Aucun jour non ouvert trouvé.");
-      return;
+      return res.json({ status: "ok", nextNotOpenDay: null });
     }
 
-    console.log("📅 Jour détecté :", nextNotOpenDay);
-
-    // Envoi WhatsApp directement si nécessaire (Make gère comparaison)
-    await client.messages.create({
-      from: FROM,
-      to: TO,
-      body: `📅 Nouveau créneau Zenchef disponible : ${nextNotOpenDay}`
+    res.json({
+      status: "ok",
+      nextNotOpenDay: nextNotOpenDay
     });
 
-    console.log("✅ Notification WhatsApp envoyée !");
   } catch (err) {
-    console.error("❌ Erreur scraping :", err);
+    console.error(err);
+    res.status(500).json({ status: "error", message: "Scraping failed" });
   }
 });
 
