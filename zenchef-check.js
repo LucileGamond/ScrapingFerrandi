@@ -30,9 +30,6 @@ app.get('/', (req, res) => {
 // ENDPOINT PRINCIPAL
 // =============================
 app.get('/check', async (req, res) => {
-  if (!SECRET_KEY || req.query.key !== SECRET_KEY) {
-    return res.status(403).send({ error: "Forbidden" });
-  }
 
   // On ne bloque pas la réponse → envoie immédiate
   res.json({ status: "ok", message: "Scraping lancé" });
