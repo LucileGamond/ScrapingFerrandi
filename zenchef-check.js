@@ -1,10 +1,9 @@
 // =============================
-// Zenchef Checker - Railway Ready
+// Zenchef Checker – Railway + Make
 // =============================
 
 const express = require('express');
 const { chromium } = require('playwright');
-const fs = require('fs');
 const twilio = require('twilio');
 
 // =============================
@@ -15,40 +14,50 @@ const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const FROM = process.env.TWILIO_FROM;
 const TO = process.env.TWILIO_TO;
 const PORT = process.env.PORT || 3000;
-
-// Vérification sécurité
-if (!ACCOUNT_SID || !AUTH_TOKEN || !FROM || !TO) {
-  console.error("❌ Variables d'environnement manquantes !");
-}
+const SECRET_KEY = process.env.SECRET_KEY; // pour sécuriser l’endpoint
 
 const client = twilio(ACCOUNT_SID, AUTH_TOKEN);
 const app = express();
-
 
 // =============================
 // PAGE RACINE
 // =============================
 app.get('/', (req, res) => {
-  res.send("Zenchef Checker actif ✅ Utilise /check");
+  res.send("Zenchef Checker actif ✅ Utilise /check?key=SECRET_KEY");
 });
-
 
 // =============================
 // ENDPOINT PRINCIPAL
 // =============================
 app.get('/check', async (req, res) => {
-  res.send("Scraping lancé ✅");
-  runScraping(); // Lancement en arrière-plan
-});
-
-// =============================
-// ENDPOINT RESET
-// =============================
-app.get('/reset', (req, res) => {
-  if (fs.existsSync('last.txt')) {
-    fs.unlinkSync('last.txt');
+  if (!SECRET_KEY || req.query.key !== SECRET_KEY) {
+    return res.status(403).send({ error: "Forbidden" });
   }
-  res.send("last.txt supprimé ✅");
+
+  // On ne bloque pas la réponse → envoie immédiate
+  res.json({ status: "ok", message: "Scraping lancé" });
+
+  try {
+    const nextNotOpenDay = await runScraping();
+
+    if (!nextNotOpenDay) {
+      console.log("❌ Aucun jour non ouvert trouvé.");
+      return;
+    }
+
+    console.log("📅 Jour détecté :", nextNotOpenDay);
+
+    // Envoi WhatsApp directement si nécessaire (Make gère comparaison)
+    await client.messages.create({
+      from: FROM,
+      to: TO,
+      body: `📅 Nouveau créneau Zenchef disponible : ${nextNotOpenDay}`
+    });
+
+    console.log("✅ Notification WhatsApp envoyée !");
+  } catch (err) {
+    console.error("❌ Erreur scraping :", err);
+  }
 });
 
 // =============================
@@ -58,8 +67,6 @@ async function runScraping() {
   let browser;
 
   try {
-    console.log("🚀 Lancement du scraping...");
-
     browser = await chromium.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -67,6 +74,7 @@ async function runScraping() {
 
     const page = await browser.newPage();
 
+    console.log("🚀 Ouverture page Zenchef...");
     await page.goto(
       'https://bookings.zenchef.com/results?rid=361825&pid=1001',
       { waitUntil: 'domcontentloaded', timeout: 60000 }
@@ -77,10 +85,7 @@ async function runScraping() {
     async function findNextNotOpenDay() {
       const element = await page.$('.DayPicker-Day--notOpenYet');
       if (!element) return null;
-      return (
-        (await element.getAttribute('aria-label')) ||
-        (await element.innerText())
-      );
+      return (await element.getAttribute('aria-label')) || (await element.innerText());
     }
 
     console.log("🔎 Recherche mois courant...");
@@ -93,34 +98,7 @@ async function runScraping() {
       nextNotOpenDay = await findNextNotOpenDay();
     }
 
-    if (!nextNotOpenDay) {
-      console.log("❌ Aucun jour trouvé.");
-      return;
-    }
-
-    console.log("📅 Jour trouvé :", nextNotOpenDay);
-
-    const last = fs.existsSync('last.txt')
-      ? fs.readFileSync('last.txt', 'utf8')
-      : '';
-
-    if (nextNotOpenDay !== last) {
-      console.log("🔔 Nouveau jour détecté !");
-      fs.writeFileSync('last.txt', nextNotOpenDay);
-
-      await client.messages.create({
-        from: FROM,
-        to: TO,
-        body: `📅 Nouveau créneau Zenchef disponible : ${nextNotOpenDay}`
-      });
-
-      console.log("✅ Notification WhatsApp envoyée !");
-    } else {
-      console.log("ℹ️ Aucun changement.");
-    }
-
-  } catch (error) {
-    console.error("❌ Erreur scraping :", error);
+    return nextNotOpenDay;
   } finally {
     if (browser) {
       await browser.close();
@@ -129,10 +107,9 @@ async function runScraping() {
   }
 }
 
-
 // =============================
 // LANCEMENT SERVEUR
 // =============================
 app.listen(PORT, () => {
-  console.log(`🌍 Serveur démarré sur le port ${PORT}`);
+  console.log(`🌍 Zenchef Checker running on port ${PORT}`);
 });
