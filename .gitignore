@@ -1,0 +1,12 @@
+# Node modules
+node_modules/
+
+# Playwright browsers
+/.cache
+/.local-browsers
+
+# Fichiers secrets
+.env
+
+# Fichier de stockage local
+last.txt

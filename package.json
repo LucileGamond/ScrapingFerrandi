@@ -1,0 +1,13 @@
+{
+  "name": "zenchef-webhook",
+  "version": "1.0.0",
+  "main": "zenchef-webhook.js",
+  "scripts": {
+    "start": "npx playwright install && node zenchef-webhook.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "playwright": "^1.41.0",
+    "twilio": "^4.16.0"
+  }
+}
