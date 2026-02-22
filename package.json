@@ -1,5 +1,5 @@
 {
-  "name": "zenchef-check",
+  "name": "zenchef-checker",
   "version": "1.0.0",
   "main": "zenchef-check.js",
   "scripts": {
