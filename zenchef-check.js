@@ -9,21 +9,16 @@ const twilio = require('twilio');
 // =============================
 // VARIABLES D'ENVIRONNEMENT
 // =============================
-const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-const FROM = process.env.TWILIO_FROM;
-const TO = process.env.TWILIO_TO;
 const PORT = process.env.PORT || 3000;
 const SECRET_KEY = process.env.SECRET_KEY; // pour sécuriser l’endpoint
 
-const client = twilio(ACCOUNT_SID, AUTH_TOKEN);
 const app = express();
 
 // =============================
 // PAGE RACINE
 // =============================
 app.get('/', (req, res) => {
-  res.send("Zenchef Checker actif ✅ Utilise /check?key=SECRET_KEY");
+  res.send("Zenchef Checker actif ✅ Utilise /check");
 });
 
 // =============================
@@ -67,9 +62,16 @@ async function runScraping() {
       'https://bookings.zenchef.com/results?rid=361825&pid=1001',
       { waitUntil: 'domcontentloaded', timeout: 60000 }
     );
-
     await page.waitForTimeout(4000);
+	
+	console.log(" Click sur le bouton pour ouvrir le calendar...");
+	const row = page.locator('.d_flex.ai_stretch.gap_gap\\.1.flex-d_row.w_100\\%');
+	const secondButton = row.locator('button').nth(1);
+	await secondButton.waitFor({ state: 'visible', timeout: 10000 });
+	await secondButton.click();
+	await page.waitForTimeout(2000);
 
+	console.log(" Récupère la 1e date notOpenYet");
     async function findNextNotOpenDay() {
       const element = await page.$('.DayPicker-Day--notOpenYet');
       if (!element) return null;
